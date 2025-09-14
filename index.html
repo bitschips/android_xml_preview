@@ -7,7 +7,7 @@
 <style>
   :root{--border:#ddd;--muted:#666}
   body{font-family:system-ui,Arial,Helvetica,sans-serif;margin:24px;max-width:980px}
-  h1{font-size:1.4rem;margin:0 0 12px}
+  h1{font-size:1.35rem;margin:0 0 12px}
   .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
   .bar input[type=file]{border:1px solid var(--border);padding:6px;border-radius:8px}
   .btn{padding:8px 14px;border:1px solid #aaa;border-radius:8px;background:#fafafa;cursor:pointer}
@@ -20,7 +20,7 @@
   .ll{display:flex;gap:8px;align-items:flex-start;justify-content:flex-start}
   .ll.vertical{flex-direction:column}
   .ll.horizontal{flex-direction:row}
-  .tv{display:inline-block}
+  .tv{display:inline-block;margin-right:8px}
   .btnw{display:inline-block;padding:8px 14px;border:1px solid #888;border-radius:8px;background:#fafafa}
   .box-unknown{border:1px dashed #bbb;padding:6px;border-radius:6px;font-size:.9rem;color:#555}
   .hint{color:var(--muted);font-size:.92rem}
@@ -33,14 +33,14 @@
 </head>
 <body>
   <h1>Preview didáctico de XML Android (Layouts y Menús)</h1>
-  <p class="hint">Compatible: <code>LinearLayout</code>, <code>TextView</code>, <code>Button</code>; y <code>menu</code> con <code>item</code>. Atributos: <code>orientation</code>, <code>layout_width/height</code> (<code>wrap_content</code>/<code>match_parent</code>), <code>text</code>, <code>textColor</code>, <code>textSize</code>, <code>padding</code>.</p>
+  <p class="hint">Soporta: <code>LinearLayout</code>, <code>TextView</code>, <code>Button</code>; y <code>menu</code> con <code>item</code>. Atributos: <code>orientation</code>, <code>layout_width/height</code> (<code>wrap_content</code>/<code>match_parent</code>), <code>text</code>, <code>textColor</code>, <code>textSize</code>, <code>padding</code>. Es un simulador didáctico, no el motor real de Android.</p>
 
   <div class="two-col">
     <div>
       <div class="bar">
         <input id="file" type="file" accept=".xml" />
-        <button class="btn" id="renderFile">Render desde archivo</button>
-        <button class="btn" id="renderText">Render desde texto</button>
+        <button class="btn" id="renderFile">Render archivo</button>
+        <button class="btn" id="renderText">Render texto</button>
         <button class="btn" id="exampleLayout">Ejemplo Layout</button>
         <button class="btn" id="exampleMenu">Ejemplo Menú</button>
       </div>
@@ -71,7 +71,7 @@
         <div id="out" class="canvas"></div>
         <div id="menubar" class="menu-bar" style="display:none"></div>
       </div>
-      <p class="hint">Esto es un render **didáctico** (no exacto). Útil para visualizar conceptos sin Android Studio.</p>
+      <p class="hint">Si tu XML no trae <code>xmlns:android</code> en la raíz, la página lo añade automáticamente.</p>
     </div>
   </div>
 
@@ -83,8 +83,7 @@ const spToPx = v => {
   if(!v) return null;
   const m = String(v).match(/(\d+(?:\.\d+)?)(sp|dp|px)?/i);
   if(!m) return null;
-  const n = parseFloat(m[1]); const unit = (m[2]||'sp').toLowerCase();
-  // Para demo, tratamos sp/dp≈px
+  const n = parseFloat(m[1]); // Para demo: sp/dp≈px
   return n;
 };
 const getAttr = (node, name) =>
@@ -165,13 +164,13 @@ function renderMenu(root){
   });
 }
 
-function doRender(xmlStr){
-  const out = byId("out");
-  out.innerHTML = "";
-  clearPhoneChrome();
+function ensureNamespaceOnRoot(xmlStr){
+  // Quita BOM y cabecera XML si vienen
+  let s = xmlStr.replace(/^\uFEFF/, "");
+  s = s.replace(/^\s*<\?xml[^>]*\?>\s*/i, "");
 
-  // Sanitizar etiquetas comunes por si llegan con prefijo "android:"
-  const sanitized = xmlStr
+  // Normaliza etiquetas con prefijo erróneo "android:"
+  s = s
     .replaceAll("<android:LinearLayout", "<LinearLayout")
     .replaceAll("</android:LinearLayout", "</LinearLayout")
     .replaceAll("<android:TextView", "<TextView")
@@ -179,6 +178,25 @@ function doRender(xmlStr){
     .replaceAll("<android:menu", "<menu")
     .replaceAll("</android:menu", "</menu")
     .replaceAll("<android:item", "<item");
+
+  // Inyecta xmlns:android si falta en la raíz
+  s = s.replace(
+    /^(<\s*[A-Za-z0-9_.:-]+)([^>]*?)>/,
+    (m, start, attrs) =>
+      /xmlns:android\s*=/.test(m)
+        ? m
+        : `${start}${attrs} xmlns:android="http://schemas.android.com/apk/res/android">`
+  );
+
+  return s;
+}
+
+function doRender(xmlStr){
+  const out = byId("out");
+  out.innerHTML = "";
+  clearPhoneChrome();
+
+  const sanitized = ensureNamespaceOnRoot(xmlStr);
 
   // Parse XML
   let xml;
@@ -192,9 +210,10 @@ function doRender(xmlStr){
   }
 
   const root = xml.documentElement;
+
   // Gestión de menú vs layout
   if(root.tagName === "menu"){
-    // zona de contenido vacía, solo barra de menú
+    // Zona de contenido vacía, solo barra de menú
     const placeholder = document.createElement("div");
     placeholder.style.width="100%";
     placeholder.style.height="240px";
