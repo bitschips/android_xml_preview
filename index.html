@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Preview didáctico de XML Android</title>
+<style>
+  :root{--border:#ddd;--muted:#666}
+  body{font-family:system-ui,Arial,Helvetica,sans-serif;margin:24px;max-width:980px}
+  h1{font-size:1.4rem;margin:0 0 12px}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+  .bar input[type=file]{border:1px solid var(--border);padding:6px;border-radius:8px}
+  .btn{padding:8px 14px;border:1px solid #aaa;border-radius:8px;background:#fafafa;cursor:pointer}
+  .btn:hover{background:#f2f2f2}
+  textarea{width:100%;height:180px;font-family:ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--border);border-radius:10px;padding:10px}
+  .phone{width:390px; margin:16px 0; border:1px solid var(--border); border-radius:28px; padding:0; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.06)}
+  .statusbar{height:10px;background:#111;opacity:.08}
+  .appbar{background:#2196f3;color:#fff;padding:12px 16px;font-weight:600}
+  .canvas{min-height:280px;padding:16px;display:flex}
+  .ll{display:flex;gap:8px;align-items:flex-start;justify-content:flex-start}
+  .ll.vertical{flex-direction:column}
+  .ll.horizontal{flex-direction:row}
+  .tv{display:inline-block}
+  .btnw{display:inline-block;padding:8px 14px;border:1px solid #888;border-radius:8px;background:#fafafa}
+  .box-unknown{border:1px dashed #bbb;padding:6px;border-radius:6px;font-size:.9rem;color:#555}
+  .hint{color:var(--muted);font-size:.92rem}
+  .menu-bar{display:flex;gap:8px;padding:8px 12px;border-top:1px solid #eaeaea;background:#fff}
+  .menu-item{padding:8px 12px;border-radius:6px;cursor:pointer}
+  .menu-item:hover{background:#f5f5f5}
+  .two-col{display:grid;grid-template-columns:1fr 420px;gap:18px;align-items:start}
+  @media (max-width:900px){.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <h1>Preview didáctico de XML Android (Layouts y Menús)</h1>
+  <p class="hint">Compatible: <code>LinearLayout</code>, <code>TextView</code>, <code>Button</code>; y <code>menu</code> con <code>item</code>. Atributos: <code>orientation</code>, <code>layout_width/height</code> (<code>wrap_content</code>/<code>match_parent</code>), <code>text</code>, <code>textColor</code>, <code>textSize</code>, <code>padding</code>.</p>
+
+  <div class="two-col">
+    <div>
+      <div class="bar">
+        <input id="file" type="file" accept=".xml" />
+        <button class="btn" id="renderFile">Render desde archivo</button>
+        <button class="btn" id="renderText">Render desde texto</button>
+        <button class="btn" id="exampleLayout">Ejemplo Layout</button>
+        <button class="btn" id="exampleMenu">Ejemplo Menú</button>
+      </div>
+      <textarea id="src" spellcheck="false"><LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hola Mundo"
+        android:textColor="#FF0000"
+        android:textSize="22sp" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Aceptar" />
+</LinearLayout></textarea>
+    </div>
+
+    <div>
+      <div class="phone">
+        <div class="statusbar"></div>
+        <div id="appbar" class="appbar" style="display:none">App</div>
+        <div id="out" class="canvas"></div>
+        <div id="menubar" class="menu-bar" style="display:none"></div>
+      </div>
+      <p class="hint">Esto es un render **didáctico** (no exacto). Útil para visualizar conceptos sin Android Studio.</p>
+    </div>
+  </div>
+
+<script>
+const byId = id => document.getElementById(id);
+
+// ===== Utilidades =====
+const spToPx = v => {
+  if(!v) return null;
+  const m = String(v).match(/(\d+(?:\.\d+)?)(sp|dp|px)?/i);
+  if(!m) return null;
+  const n = parseFloat(m[1]); const unit = (m[2]||'sp').toLowerCase();
+  // Para demo, tratamos sp/dp≈px
+  return n;
+};
+const getAttr = (node, name) =>
+  node.getAttribute(name) || node.getAttribute("android:"+name);
+
+const applySize = (el, node) => {
+  const w = getAttr(node,"layout_width");
+  const h = getAttr(node,"layout_height");
+  if(w==="match_parent") el.style.width="100%";
+  if(h==="match_parent") el.style.height="100%";
+  const pad = getAttr(node,"padding");
+  if(pad){ const px = spToPx(pad); if(px!=null) el.style.padding = px+"px"; }
+};
+
+const clearPhoneChrome = () => {
+  byId("appbar").style.display="none";
+  byId("menubar").style.display="none";
+  byId("menubar").innerHTML="";
+};
+
+// ===== Render =====
+function renderNode(node){
+  const name = node.tagName;
+
+  if(name==="LinearLayout"){
+    const wrap = document.createElement("div");
+    wrap.className="ll " + (getAttr(node,"orientation")==="horizontal" ? "horizontal" : "vertical");
+    applySize(wrap,node);
+    [...node.children].forEach(ch => wrap.appendChild(renderNode(ch)));
+    return wrap;
+  }
+
+  if(name==="TextView"){
+    const el = document.createElement("span");
+    el.className="tv";
+    el.textContent = getAttr(node,"text") || "";
+    const color = getAttr(node,"textColor"); if(color) el.style.color = color;
+    const size = getAttr(node,"textSize"); if(size){ const px=spToPx(size); if(px!=null) el.style.fontSize = px+"px"; }
+    applySize(el,node);
+    return el;
+  }
+
+  if(name==="Button"){
+    const el = document.createElement("button");
+    el.className="btnw";
+    el.textContent = getAttr(node,"text") || "Button";
+    applySize(el,node);
+    return el;
+  }
+
+  // Desconocidos: caja neutra
+  const box = document.createElement("div");
+  box.className="box-unknown";
+  box.textContent = `<${name}> (no soportado en la demo)`;
+  return box;
+}
+
+function renderMenu(root){
+  // AppBar visible
+  const appbar = byId("appbar");
+  appbar.style.display="block";
+  appbar.textContent = "Mi App (menú)";
+
+  const menubar = byId("menubar");
+  menubar.style.display="flex";
+
+  const items = [...root.getElementsByTagName("item")];
+  if(items.length===0){
+    menubar.innerHTML = '<div class="menu-item" style="opacity:.6">No hay items</div>';
+    return;
+  }
+  items.forEach(it=>{
+    const title = getAttr(it,"title") || "(sin título)";
+    const div = document.createElement("div");
+    div.className="menu-item";
+    div.textContent = title;
+    menubar.appendChild(div);
+  });
+}
+
+function doRender(xmlStr){
+  const out = byId("out");
+  out.innerHTML = "";
+  clearPhoneChrome();
+
+  // Sanitizar etiquetas comunes por si llegan con prefijo "android:"
+  const sanitized = xmlStr
+    .replaceAll("<android:LinearLayout", "<LinearLayout")
+    .replaceAll("</android:LinearLayout", "</LinearLayout")
+    .replaceAll("<android:TextView", "<TextView")
+    .replaceAll("<android:Button", "<Button")
+    .replaceAll("<android:menu", "<menu")
+    .replaceAll("</android:menu", "</menu")
+    .replaceAll("<android:item", "<item");
+
+  // Parse XML
+  let xml;
+  try {
+    xml = new DOMParser().parseFromString(sanitized, "text/xml");
+    const err = xml.getElementsByTagName("parsererror")[0];
+    if(err) throw new Error(err.textContent);
+  } catch(e){
+    alert("XML inválido: " + e.message);
+    return;
+  }
+
+  const root = xml.documentElement;
+  // Gestión de menú vs layout
+  if(root.tagName === "menu"){
+    // zona de contenido vacía, solo barra de menú
+    const placeholder = document.createElement("div");
+    placeholder.style.width="100%";
+    placeholder.style.height="240px";
+    placeholder.style.display="flex";
+    placeholder.style.alignItems="center";
+    placeholder.style.justifyContent="center";
+    placeholder.style.color="#777";
+    placeholder.textContent = "Contenido de pantalla";
+    out.appendChild(placeholder);
+    renderMenu(root);
+    return;
+  }
+
+  // Layout normal
+  out.appendChild(renderNode(root));
+}
+
+// ===== Eventos =====
+byId("renderText").onclick = () => doRender(byId("src").value);
+
+byId("renderFile").onclick = async () => {
+  const f = byId("file").files?.[0];
+  if(!f){ alert("Selecciona un archivo .xml"); return; }
+  const text = await f.text();
+  byId("src").value = text;
+  doRender(text);
+};
+
+byId("exampleLayout").onclick = () => {
+  const ex = `<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hola"
+        android:textColor="#333333"
+        android:textSize="20sp" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Aceptar" />
+</LinearLayout>`;
+  byId("src").value = ex;
+  doRender(ex);
+};
+
+byId("exampleMenu").onclick = () => {
+  const ex = `<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/menu_inicio" android:title="Inicio"/>
+    <item android:id="@+id/menu_configuracion" android:title="Configuración"/>
+    <item android:id="@+id/menu_salir" android:title="Salir"/>
+</menu>`;
+  byId("src").value = ex;
+  doRender(ex);
+};
+
+// Render inicial
+doRender(byId("src").value);
+</script>
+</body>
+</html>
